@@ -1,0 +1,234 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r, echo=FALSE}
+library(dplyr)
+library(coin)
+library(MASS)
+library(bindata)
+
+#function to generate data from mvrbinom
+rmvBinomial <- function(n, size, p1, p2, rho) {
+    X <- replicate(n, {
+             colSums(rmvbin(size, c(p1,p2), bincorr=(1-rho)*diag(2)+rho))
+         })
+    t(X)
+}
+
+```
+
+```{r}
+#p value should be 0.126
+#S+ should be 135, U+ is 189
+x <- c(4, 69, 87, 35, 39, 79, 31, 79, 65, 95, 68, 62, 70, 80, 84, 79, 66, 75, 59, 77)
+y <- c(62, 80, 82, 83, 0, 81, 28, 69, 48, 90, 63, 77, 0, 55, 83, 85, 54, 72, 58, 68)
+t <- c(36, 86, 39, 85, 74, 72, 69, 85, 85, 72)
+c <- c(88, 83, 78, 30, 58, 45, 78, 64, 87, 65)
+
+#p value should be with permutation raw data 0.823
+kit <- c(7.27, 4.17, 2.21, 3.68, 12.07, 5.06)
+chlor <-c(7.60, .16, 3.60, 0.04, 6.16, 23.08)
+
+kit_only <- c(2.00, 2.83, 0.95, 1.25, 4.15, 3.85, 2.08, 3.10)
+chlor_only <- c(2.96, 3.00, 2.56, 0.24, 1.16, 3.16, 3.68, 3.12, 3.24, 1.80, 2.72, 2.36, 3.23, 3.80, 3.20, 4.80)
+```
+.05 type 1 error rate 
+
+3-7%
+
+power
+
+adjusted
+```{r}
+set.seed(1)
+#Simulation 
+#Sample Size: 20/20/20
+
+r <- 1000
+n <- 30
+n1 <- 5
+n2 <- 5
+mu1 <- 10
+mu2 <- 0
+
+#Data generation settings 
+size <- 1000 #amount of coinflips
+p1 <- 0.5
+p2 <- 0.5
+rho<- 0  #correlation
+
+#store number of rejects
+asymptotic.reject <- 0
+ad.asymptotic.reject <- 0
+permutation.reject <- 0
+sr.permutation.reject <- 0
+sr.asymptotic.reject <- 0
+
+for (i in 1:r) {
+  #generate data from mvrbinomial
+  N <- n+n1+n2
+  sample.data <- rmvBinomial(N, size=size, p1=p1, p2=p2, rho=rho)
+  paired <- sample.data[1:n,]
+  
+  x <- mu1 + paired[,1]
+  y <- mu2 + paired[,2]
+  
+  sample.index <- sample(1:(n1 + n2), n1)
+  unp <- sample.data[(n+1):(n+n1+n2),]
+  
+  t <- mu1 + unp[sample.index,1]
+  c <- mu2 + unp[-sample.index,2]
+  
+  unpair <- c(t,c)
+  
+  diff <- x - y
+
+  summary(paired[,1])
+  summary(paired[,2])
+  
+  #remove zeros
+  diff <- diff[diff != 0]
+  
+  #rank the differences
+  diff.rank <- rank(abs(diff))
+  
+  #calculate signed ranks
+  diff.rank.sign <- diff.rank*sign(diff)
+  
+  #calculate sign rank statistic 
+  obs.sign.rank <- sum(diff.rank.sign[diff.rank.sign > 0])
+  
+  #calculate rank sum statistic
+  obs.rank.sum <- sum(rank(unpair)[1:n1]) - (n1 * (n1 + 1)/2)
+  
+  #calculate combined wilcoxon statistic
+  obs.T <- obs.sign.rank + obs.rank.sum
+  
+  #expected value
+  e.af <- sum(diff.rank)/2 + n1*n2/2
+  #V(SR) + V(W) 
+  v.af <- sum((diff.rank)^2)/4 + (n1*n2*var(rank(unpair))*(n1 + n2 -1)/n)/(n1 + n2 - 1)
+  z.af <- (obs.T - e.af)/sqrt(v.af)
+  
+  asym.adjusted.p.value = 1 - pnorm(abs(z.af), mean = 0, sd = 1, lower.tail = TRUE)
+  
+  
+  #permutation test 
+  r.perm <- 2000
+  u <- c(-1, 1)
+  sample.z <- rep(NA, r.perm)
+  for ( l in 1:r.perm ) {
+    #sample for rank sum 
+    sample.t <- sample(rank(unpair), n1, replace = FALSE)
+    sample.rank.sum <- sum(sample.t) - (n1 * (n1 + 1)/2)
+    
+    #sample for diffs
+    sample.sign = sample(u, size = length(diff.rank), replace = TRUE)
+    sample.diff.sign <- diff.rank*sample.sign
+    sample.sign.rank <- sum(sample.diff.sign[sample.diff.sign > 0])
+  
+    sample.T <- sample.rank.sum + sample.sign.rank
+    
+    sample.z[l] <- (sample.T - e.af)/sqrt(v.af)
+  }
+  
+  perm.p.value <- sum(abs(sample.z) >= abs(z.af))/r.perm
+  
+  if (perm.p.value < 0.025) {
+    permutation.reject = permutation.reject + 1
+  }
+  
+  #asymtotic test without adjustment for ties 
+  #E(SR) + E(W)
+  e.t <- n*(n+1)/4 + n1*n2/2
+  v.t <- n*(n+1)*(2*n+1)/24 + n1*n2*(n1+n2+1)/12
+  z.t <- (obs.T - e.t)/sqrt(v.t)
+  
+  asymtotic.p.value = 1 - pnorm(abs(z.t), mean = 0, sd = 1, lower.tail = TRUE)
+  
+  if (asymtotic.p.value < 0.025) {
+    asymptotic.reject = asymptotic.reject + 1
+  }
+  
+  #asymtotic calculation including adjustment for ties 
+  #E(SR) + E(W) same as without ties
+  
+  
+  if (asym.adjusted.p.value < 0.025) {
+    ad.asymptotic.reject = ad.asymptotic.reject + 1
+  }
+  
+  #permutation
+  sr.2 <- wilcoxsign_test(x ~ y, zero.method = "Wilcoxon", distribution = "exact")
+  
+  sr.2
+  if (pvalue(sr.2) < 0.05) {
+    sr.permutation.reject = sr.permutation.reject + 1
+  }
+  
+  #asymptotic]
+  sr.3 <- wilcoxsign_test(x ~ y, zero.method = "Wilcoxon", distribution = "asymptotic")
+  
+  if (pvalue(sr.3) < 0.05) {
+    sr.asymptotic.reject = sr.asymptotic.reject + 1
+  }
+}
+
+asymptotic.reject/r
+ad.asymptotic.reject/r 
+permutation.reject/r
+sr.permutation.reject/r
+sr.asymptotic.reject/r
+```
+
+```{r}
+#generating correlated binomial data
+# Parameters of joint distribution
+
+#number of observations
+size <- 200
+#marginal probabilities
+p1 <- 0.5
+p2 <- 0.5
+#correlation
+rho<- 0.5
+overall <- 40
+np <- 8
+nux <- 16
+nuy <- 16
+
+diff.tie <- rep(NA,100)
+unpair.tie <- rep(NA,100)
+
+for ( i in 1:100) {
+# Try it out, creating pairs
+X <- rmvBinomial(overall, size=size, p1=p1, p2=p2, rho=rho)
+
+paired <- X[1:np,]
+  
+diff <- paired[,1] - paired[,2]
+
+sample.index <- sample(1:(nux + nuy), nux)
+unp <- X[(np + 1):(np+nux+nuy),]
+  
+t <- unp[sample.index,1]
+c <- unp[-sample.index,2]
+
+unpair <- c(t,c)
+
+diff.df <- as.data.frame(table(diff))
+diff.tie[i] <- sum(diff.df$Freq[diff.df$Freq > 1])/np
+
+
+unpair.df <- as.data.frame(table(unpair))
+unpair.tie[i] <- sum(unpair.df$Freq[unpair.df$Freq > 1])/(nux+nuy)
+}
+
+mean(diff.tie)
+mean(unpair.tie)
+```
+
+
+
