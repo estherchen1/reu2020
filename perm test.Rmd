@@ -1,0 +1,372 @@
+---
+title: "permutation test"
+author: "esther"
+date: "6/16/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+x <- c(37, 49, 55, 57, 23, 31, 46)
+
+permutation_test(x, 4, 10000)
+
+
+x1 <- c(1530, 2130, 2940, 1960, 2270)
+x2 <- c(1290, 2250, 2430, 1900, 2120)
+
+
+s = 10000
+```
+
+```{r}
+unaffected <- c(1.94, 1.44, 1.56, 1.58, 2.06, 1.66, 1.75, 1.77, 1.78, 1.92, 1.24, 1.93, 2.04, 1.62, 2.08)
+affected <- c(1.27, 1.63, 1.27, 1.39, 1.92, 1.26, 1.71, 1.67, 1.28, 1.85, 1.02, 1.43, 2.02, 1.59, 1.97)
+
+```
+
+```{r}
+kit <- c(7.27, 4.17, 2.21, 3.68, 12.07, 5.06)
+chlor <-c(7.60, .16, 3.60, 0.04, 6.16, 23.08)
+
+
+kit_only <- c(2.00, 2.83, 0.95, 1.25, 4.15, 3.85, 2.08, 3.10)
+chlor_only <- c(2.96, 3.00, 2.56, 0.24, 1.16, 3.16, 3.68, 3.12, 3.24, 1.80, 2.72, 2.36, 3.23, 3.80, 3.20, 4.80)
+```
+
+
+
+```{r}
+permutation_test <- function(x, m, n){
+  
+  #x is a vector of data where the first m observations belong to the first treatment, and the rest belong to the second treatment, sample n times
+  lenx = length(x)
+  
+  mean1 <- mean(x[1:m])
+  mean2 <- mean(x[(m+1):lenx])
+  
+  obs_diff <- mean1 - mean2
+  
+  sampled_diffs <- rep(NA, n)
+  
+  set.seed(1)
+  
+  for (i in 1:n) {
+    
+    permutation = sample(x, size = length(x), replace = FALSE)
+    
+    perm_mean_1 = mean(permutation[1:m])
+    perm_mean_2 = mean(permutation[(m+1):lenx])
+  
+    perm_diff = perm_mean_1 - perm_mean_2
+    
+    
+    sampled_diffs[i] <- perm_diff
+  }
+  
+    y <- sum(sampled_diffs >= obs_diff)
+    
+    p_value = y/n
+    
+    return(p_value)
+    
+}
+```
+
+
+
+```{r}
+paired_permutation <- function(x1, x2, s){
+  diffs <- x1 - x2
+  obs_mean_diff <- mean(diffs)
+  
+  n <- length(x1)
+  
+  u <- c(-1, 1)
+  
+  sample_mean_diffs <- rep(NA, s)
+  
+  for(i in 1:s) {
+    sign = sample(u, size = n, replace = TRUE)
+    
+    diff_permutation = diffs*sign
+    
+    perm_mean = mean(diff_permutation)
+    
+    sample_mean_diffs[i] = perm_mean
+  }
+  
+  y <- sum(sample_mean_diffs >= obs_mean_diff)
+  
+  p_value = y/s
+  
+  return(p_value)
+}
+```
+
+```{r}
+paired_permutation(x1, x2, 100000)
+```
+
+```{r}
+signed_rank_test <- function(x1, x2, s){
+  #takes in vectors of paired data, number of samples to run s 
+  differences <- x1 - x2
+  
+  n <- length(x1)
+  
+  #get ranks
+  ranks <- rank(abs(differences))
+  #get signs
+  signs <- sign(differences)
+  
+  signed_ranks <- ranks*signs
+  
+  positive_ranks <- (signed_ranks > 0)
+  
+  obs_sr <- sum(signed_ranks * positive_ranks)
+
+  v <- c(-1, 1)
+
+  sample_sr <- rep(NA, s)
+  
+      for(i in 1:s){
+        sign = sample(v, size = n, replace = TRUE)
+    
+        sign_perm <- ranks*sign
+        
+        pos_perm <- (sign_perm > 0)
+        
+        perm_sr <- sum(sign_perm * pos_perm)
+    
+        sample_sr[i] <- perm_sr 
+    }
+  
+  
+  y <- sum(sample_sr >= obs_sr)
+  
+  p_value <- y/s
+  
+  return(p_value)
+  
+}
+    
+```
+
+```{r}
+signed_rank_test(x1, x2, 1000)
+
+signed_rank_test(unaffected, affected, 10000)
+```
+
+```{r}
+rank_sum_test <- function(x, m){
+  n = length(x)
+  
+  r = 1000
+  
+  ranks = rank(x)
+  
+  
+  obs_sum<- sum(ranks[1:m])
+ 
+  sampled_sums <- rep(NA, r)
+  
+  set.seed(1)
+  
+  for (i in 1:r) {
+    
+    permutation = sample(ranks, size = m, replace = FALSE)
+    
+    perm_sum = sum(permutation)
+    
+    sampled_sums[i] <- perm_sum
+  }
+  
+    y <- sum(sampled_sums >= obs_sum)
+    
+    p_value = y/r
+    
+    return(p_value)
+  
+}
+
+
+```
+
+```{r}
+rank_sum_test(x, 4)
+
+```
+
+
+```{r}
+combined_T <- function(x, y, x1, y1){
+  
+  #x and y are paired, x1 and y1 are unpaired
+  
+  np <- length(x)
+  nux <- length(x1)
+  nuy <- length(y1)
+  
+  
+  unpaired <- c(x1, y1)
+  unpaired_length <- length(unpaired)
+
+  
+  paired_diff <- x - y
+  
+  obs_paired_mean_diff <-  mean(x) - mean(y)
+  obs_unpaired_mean_diff <- mean(x1) - mean(y1)
+  obs_T <- (obs_paired_mean_diff + obs_unpaired_mean_diff)*1/2
+  
+  r <- 5000
+  
+  u <- c(-1, 1)
+  
+  sample_T <- rep(NA, r)
+  
+  set.seed(1)
+  
+  for( i in 1:r ) {
+    
+   sign <- sample(u, np, replace = TRUE)
+   sample_paired_perm <- abs(paired_diff) * sign
+   
+   
+   unpaired_perm <- sample(unpaired, unpaired_length, replace = FALSE)
+   unpaired_mean_diff <- mean(unpaired_perm[1:nux]) - mean(unpaired_perm[(nux+1):unpaired_length])
+   sample_T[i] <- (mean(sample_paired_perm) + unpaired_mean_diff)*1/2
+  
+  }
+  
+  p_value <- sum(abs(sample_T) >= abs(obs_T)) / r
+  
+  return(p_value)
+  
+}
+
+
+```
+
+```{r}
+combined_T(kit, chlor, kit_only, chlor_only)
+
+
+combined_wilcoxon(v, w, t, c)
+```
+```{r}
+combined_wilcoxon <- function(x, y, x1, y1){
+   
+  np <- length(x)
+  nux <- length(x1)
+  nuy <- length(y1)
+
+
+  paired <- c(x, y)
+  paired_length <- length(paired)
+  paired_diff <- x - y
+  paired_ranks <- rank(abs(paired_diff))
+
+
+  signs <- sign(paired_diff)
+  signed_ranks <- paired_ranks * signs
+  positive_ranks <- (signed_ranks > 0)
+  obs_sr <- sum(signed_ranks * positive_ranks)
+
+  unpaired <- c(x1, y1)
+  unpaired_rank <- rank(unpaired)
+  unpaired_length <- length(unpaired)
+  obs_sum <- sum(unpaired_rank[1:nux])
+
+  obs_T <- obs_sr + obs_sum
+
+  r <- 5000
+
+  u <- c(-1, 1)
+
+  sample_T <- rep(NA, r)
+
+  set.seed(1)
+
+  for( i in 1:r ) {
+  
+    unpaired_perm <- sample(unpaired_rank, nux, replace = FALSE)
+    sample_sum <- sum(unpaired_perm)
+  
+    sign = sample(u, size = np, replace = TRUE)
+    sign_perm <- paired_ranks*sign
+    pos_perm <- (sign_perm > 0)
+    sample_sr <- sum(sign_perm * pos_perm)
+  
+  
+    sample_T[i] <- sample_sum + sample_sr
+  
+  }
+
+  p_value <- sum(abs(sample_T) > abs(obs_T)) / r
+
+  return(p_value)
+  
+}
+```
+
+```{r}
+x <- c(4, 69, 87, 35, 39, 79, 31, 79, 65, 95, 68, 62, 70, 80, 84, 79, 66, 75, 59, 77)
+y <- c(62, 80, 82, 83, 0, 81, 28, 69, 48, 90, 63, 77, 0, 55, 83, 85, 54, 72, 58, 68)
+
+x1 <- c(36, 86, 39, 85, 74, 72, 69, 85, 85, 72)
+y1 <- c(88, 83, 78, 30, 58, 45, 78, 64, 87, 65)
+
+
+combined_wilcoxon(kit, chlor, kit_only, chlor_only)
+combined_wil_lsa(kit, chlor, kit_only, chlor_only)
+```
+
+```{r}
+combined_wil_lsa <- function(x, y, x1, y1) {
+   n <- length(x)
+  n1 <- length(x1)
+  n2 <- length(y1)
+  
+  
+  paired_diff <- x - y
+  paired_ranks <- rank(abs(paired_diff))
+  
+  
+  signs <- sign(paired_diff)
+  signed_ranks <- paired_ranks * signs
+  positive_ranks <- (signed_ranks > 0)
+  obs_sr <- sum(signed_ranks * positive_ranks)
+  
+  unpaired <- c(x1, y1)
+  unpaired_rank <- rank(unpaired)
+  unpaired_length <- length(unpaired)
+  obs_sum <- sum(unpaired_rank[1:n1]) - (n1 * (n1 + 1)/2)
+  
+ 
+  
+  obs_T <- obs_sr + obs_sum
+    
+  e_t <- n*(n+1)/4 + n1*n2/2
+  
+  v_t <- n*(n+1)*(2*n+1)/24 + n1*n2*(n1 + n2 + 1)/12
+  
+  z <- (obs_T - e_t)/sqrt(v_t)
+  
+  p_value = 1 - pnorm(z, mean = 0, sd = 1, lower.tail = TRUE)
+  
+  return (p_value)
+  
+}
+```
+

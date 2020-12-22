@@ -1,0 +1,88 @@
+---
+title: "T test code"
+author: "esther"
+date: "6/14/2020"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+t_test_independent <- function(x1, x2, mu){
+  #mean of pop 1
+  mean1 = mean(x1)
+  
+  #mean of pop 2
+  mean2 = mean(x2)
+  
+  
+  #n obs pop 1
+  n1 = nrow(x1)
+  
+  #n obs pop 2
+  n2 = nrow(x2)
+  
+  
+  #calculate sd
+  sd1 = sd(x1)
+  sd2 = sd(x2)
+  
+  
+  sp = ((n1 - 1)*sd1^2 + (n2 - 1)*sd2^2)/(n1 + n2 - 2)
+  
+  #calculate t score
+  t_score = ((mean1 - mean2) - mu)/sqrt(sp/n1 + sp/n2)
+  
+  
+  #upper or lower tail check if its positive or negative
+  #two sided
+  
+  #calculate p value 
+  p_value = 1 - pt(t_score, df = n1 + n2 - 2)
+  
+}
+```
+
+```{r}
+t_test_paired <- function(x1, x2){
+  #calculate differences
+  diff = x1 - x2
+  
+  #number of obs
+  n = nrow(x1)
+  
+  #mean difference
+  meandiff = mean(diff)
+  
+  #sd of differences
+  sddiff = sd(diff)
+  
+  #se of difference
+  se = sddiff/sqrt(n)
+
+  #calculate t score 
+  t_score = meandiff / se
+  
+  #find p value
+  p_value = 1 - pt(abs(t_score), df = n-1) * 2
+  
+  
+  #find critical value
+  t_star = qt(0.025, df = n-1)
+  
+  #calculate confidence interval
+  ci = c(meandiff - t_star * se, meandiff + t_star * se)
+  
+  return( c(p_value, ci))
+}
+```
+
+
+
+
+
+
+
