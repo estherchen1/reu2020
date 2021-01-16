@@ -1,2 +1,2 @@
 # reu2020
-R code from research project 
+materials from this summer 
